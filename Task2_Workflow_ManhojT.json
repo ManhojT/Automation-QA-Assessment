@@ -1,0 +1,191 @@
+{
+  "meta": {
+    "instanceId": "n8n-local"
+  },
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "crypto-brief",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "2",
+      "name": "Get Top Cryptos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1",
+        "options": {}
+      }
+    },
+    {
+      "id": "3",
+      "name": "Transform Top 5",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "jsCode": "const coins = $input.first().json;\nconst top5 = Array.isArray(coins) ? coins.slice(0,5) : [];\nreturn top5.map(coin => ({\n  json: {\n    id: coin.id,\n    name: coin.name,\n    symbol: coin.symbol.toUpperCase(),\n    current_price: coin.current_price,\n    price_change_24h: coin.price_change_percentage_24h,\n    market_cap: coin.market_cap\n  }\n}));"
+      }
+    },
+    {
+      "id": "4",
+      "name": "Enrich Top Coin",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.coingecko.com/api/v3/coins/{{ $('Transform Top 5').first().json.id }}?localization=false&tickers=false&community_data=false&developer_data=false",
+        "options": {}
+      }
+    },
+    {
+      "id": "5",
+      "name": "IF Price Change > 5%",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition1",
+              "leftValue": "={{ $('Transform Top 5').first().json.price_change_24h }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "6",
+      "name": "Discord Alert - High Change",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1340, 180],
+      "parameters": {
+        "method": "POST",
+        "url": "YOUR_DISCORD_WEBHOOK_URL",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ content: '🚨 CRYPTO ALERT 🚨\\n\\nTop Coin: ' + $(\\'Transform Top 5\\').first().json.name + ' (' + $(\\'Transform Top 5\\').first().json.symbol + ')\\nPrice: $' + $(\\'Transform Top 5\\').first().json.current_price + '\\n24h Change: ' + $(\\'Transform Top 5\\').first().json.price_change_24h + '%\\n\\n📊 High volatility detected!' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "7",
+      "name": "Discord Brief - Normal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1340, 420],
+      "parameters": {
+        "method": "POST",
+        "url": "YOUR_DISCORD_WEBHOOK_URL",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ content: '📊 Daily Crypto Brief\\n\\nTop Coin: ' + $(\\'Transform Top 5\\').first().json.name + ' (' + $(\\'Transform Top 5\\').first().json.symbol + ')\\nPrice: $' + $(\\'Transform Top 5\\').first().json.current_price + '\\n24h Change: ' + $(\\'Transform Top 5\\').first().json.price_change_24h + '%\\n\\nMarket is stable today.' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "8",
+      "name": "Discord Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 500],
+      "parameters": {
+        "method": "POST",
+        "url": "YOUR_DISCORD_WEBHOOK_URL",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "{\"content\": \"❌ Crypto Brief workflow encountered an error. Please check n8n logs.\"}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Top Cryptos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Top Cryptos": {
+      "main": [
+        [
+          {
+            "node": "Transform Top 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform Top 5": {
+      "main": [
+        [
+          {
+            "node": "Enrich Top Coin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Top Coin": {
+      "main": [
+        [
+          {
+            "node": "IF Price Change > 5%",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Price Change > 5%": {
+      "main": [
+        [
+          {
+            "node": "Discord Alert - High Change",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Discord Brief - Normal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
